@@ -11,6 +11,7 @@ public class SimpleGameManager : MonoBehaviour
 {
     [Header("UI")]
     [SerializeField] private TMP_Text scoreText;
+    [SerializeField] private TMP_Text scoreText2;
     [SerializeField] private TMP_Text comboText;
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private GameObject wall;
@@ -72,6 +73,7 @@ public class SimpleGameManager : MonoBehaviour
     [SerializeField] private float feverIntervalMax = 150f; // 次のフィーバーまでの間隔（最大）
     [SerializeField] private float feverDurationMin = 30f; // フィーバー継続時間（最小）
     [SerializeField] private float feverDurationMax = 60f; // フィーバー継続時間（最大）
+    [SerializeField] private int feverLimitScore = 15000; // このスコアを超えたら確変なし
 
     private bool isFeverTime = false;
     public bool IsFeverTime => isFeverTime;
@@ -230,7 +232,11 @@ public class SimpleGameManager : MonoBehaviour
 
     public void PlayGameOverSound()
     {
-        PlaySound(gameoverSound);
+        // ゲームオーバー音は例外的に鳴らす
+        if (gameoverSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(gameoverSound, seVolume);
+        }
     }
 
     public void StopAllSounds()
@@ -243,6 +249,9 @@ public class SimpleGameManager : MonoBehaviour
 
     private void PlaySound(AudioClip clip)
     {
+        // ゲームオーバー時はSEを鳴らさない
+        if (isGameOver) return;
+
         if (clip != null && audioSource != null)
         {
             audioSource.PlayOneShot(clip, seVolume);
@@ -375,6 +384,7 @@ public class SimpleGameManager : MonoBehaviour
         if (scoreText != null)
         {
             scoreText.text = $"{currentScore}";
+            scoreText2.text = $"Score: {currentScore}";
         }
     }
 
@@ -424,6 +434,9 @@ public class SimpleGameManager : MonoBehaviour
         isGameOver = true;
 
         Debug.Log("ゲームオーバー！");
+
+        // SEをすべて停止
+        StopAllSounds();
 
         PlayGameOverSound();
 
@@ -489,7 +502,15 @@ public class SimpleGameManager : MonoBehaviour
         if (feverTimer >= currentFeverTargetTime)
         {
             // モード切り替え
-            SetNextFeverSchedule(!isFeverTime);
+            bool nextState = !isFeverTime;
+
+            // スコアが上限を超えていたら、確変（Fever）には入らない
+            if (currentScore >= feverLimitScore)
+            {
+                nextState = false;
+            }
+
+            SetNextFeverSchedule(nextState);
         }
     }
 
