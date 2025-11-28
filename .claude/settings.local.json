@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(del FallingItem.cs ItemType.cs TouchController.cs ItemSpawner.cs)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
