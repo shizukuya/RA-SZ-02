@@ -183,6 +183,9 @@ public class SimpleSpawner : MonoBehaviour
     /// <summary>
     /// アイテムタイプを選択（同じタイプはmaxConsecutive回まで）
     /// </summary>
+    /// <summary>
+    /// アイテムタイプを選択（盤面状況に応じて確率変動）
+    /// </summary>
     private SimpleItemType SelectItemType()
     {
         // 連続回数が上限に達している場合、別のタイプを強制選択
@@ -191,15 +194,107 @@ public class SimpleSpawner : MonoBehaviour
             return SelectDifferentType(lastItemType);
         }
 
-        // 通常のランダム選択
-        float total = whiteRiceChance + noriChance + fillingChance;
+        // 基本確率
+        float wWhite = whiteRiceChance;
+        float wNori = noriChance;
+        float wFilling = fillingChance;
+
+        // フィーバータイム中のみ「盤面調整（スマートスポーン）」を適用
+        bool isFever = false;
+        if (SimpleGameManager.Instance != null)
+        {
+            isFever = SimpleGameManager.Instance.IsFeverTime;
+        }
+
+        if (isFever)
+        {
+            // 盤面分析
+            SimpleItem[] allItems = FindObjectsByType<SimpleItem>(FindObjectsSortMode.None);
+            int countWhite = 0;
+            int countNori = 0;
+            int countFilling = 0;
+            int countFillingO = 0; // 白+具（海苔待ち）
+            int countWithNori = 0; // 白+海苔（具材待ち）
+
+            foreach (var item in allItems)
+            {
+                if (item == null || item.IsFalling || item.isMerged) continue;
+                
+                switch (item.CurrentState)
+                {
+                    case OnigiriState.White: countWhite++; break;
+                    case OnigiriState.Nori: countNori++; break;
+                    case OnigiriState.Filling: countFilling++; break;
+                    case OnigiriState.FillingO: countFillingO++; break;
+                    case OnigiriState.WithNori: countWithNori++; break;
+                }
+            }
+
+            // 確率変動ロジック（パチンコ風演出）
+            
+            // 1. 海苔待ち（FillingO）が多い -> 海苔確率アップ
+            if (countFillingO > 0)
+            {
+                float boost = countFillingO * 15f;
+                wNori += boost;
+                Debug.Log($"[SmartSpawn] Fever! 海苔待ち({countFillingO}個) -> 海苔+{boost}");
+            }
+
+            // 2. 具材待ち（WithNori）が多い -> 具材確率アップ
+            if (countWithNori > 0)
+            {
+                float boost = countWithNori * 15f;
+                wFilling += boost;
+                Debug.Log($"[SmartSpawn] Fever! 具材待ち({countWithNori}個) -> 具材+{boost}");
+            }
+
+            // 3. 白が多い -> 白を下げて、他を上げる
+            if (countWhite > 2)
+            {
+                wWhite -= 20f;
+                wNori += 10f;
+                wFilling += 10f;
+                Debug.Log($"[SmartSpawn] Fever! 白過多({countWhite}個) -> 白ダウン");
+            }
+
+            // 4. 具材（単体）が多い -> 白を上げる
+            if (countFilling > 2)
+            {
+                wWhite += 20f;
+                wFilling -= 10f;
+                Debug.Log($"[SmartSpawn] Fever! 具材過多({countFilling}個) -> 白アップ");
+            }
+
+            // 5. 海苔（単体）が多い -> 白と具材を上げる
+            if (countNori > 2)
+            {
+                wNori -= 20f;
+                wWhite += 10f;
+                wFilling += 10f;
+                Debug.Log($"[SmartSpawn] Fever! 海苔過多({countNori}個) -> 海苔ダウン");
+            }
+        }
+        else
+        {
+            // 通常時：ランダム（何もしない＝基本確率のまま）
+            // Debug.Log("[SmartSpawn] Normal Mode (Random)");
+        }
+
+        // 負の値にならないように補正
+        if (wWhite < 5f) wWhite = 5f;
+        if (wNori < 5f) wNori = 5f;
+        if (wFilling < 5f) wFilling = 5f;
+
+        float total = wWhite + wNori + wFilling;
         float random = Random.Range(0f, total);
 
-        if (random < whiteRiceChance)
+        Debug.Log($"[SmartSpawn] Weights -> White:{wWhite:F1}, Nori:{wNori:F1}, Filling:{wFilling:F1} (Total:{total:F1})");
+
+        if (random < wWhite)
         {
             return SimpleItemType.WhiteRice;
         }
-        else if (random < whiteRiceChance + noriChance)
+        else if (random < wWhite + wNori)
         {
             return SimpleItemType.Nori;
         }

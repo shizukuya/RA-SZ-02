@@ -65,6 +65,20 @@ public class SimpleGameManager : MonoBehaviour
     public bool IsGameOver => isGameOver;
     public int ComboCount => comboCount;
 
+    // ===== フィーバーモード設定 =====
+    [Header("フィーバーモード")]
+    // [SerializeField] private TMP_Text feverText; // "FEVER!!" 表示用（廃止：裏設定のため）
+    [SerializeField] private float feverIntervalMin = 90f; // 次のフィーバーまでの間隔（最小）
+    [SerializeField] private float feverIntervalMax = 150f; // 次のフィーバーまでの間隔（最大）
+    [SerializeField] private float feverDurationMin = 30f; // フィーバー継続時間（最小）
+    [SerializeField] private float feverDurationMax = 60f; // フィーバー継続時間（最大）
+
+    private bool isFeverTime = false;
+    public bool IsFeverTime => isFeverTime;
+
+    private float feverTimer = 0f;
+    private float currentFeverTargetTime = 0f;
+
     // シングルトン
     public static SimpleGameManager Instance { get; private set; }
 
@@ -107,6 +121,34 @@ public class SimpleGameManager : MonoBehaviour
             bgmAudioSource.loop = true;
             bgmAudioSource.volume = bgmVolume;
             bgmAudioSource.Play();
+        }
+
+        // 初回のフィーバー待ち時間を設定
+        SetNextFeverSchedule(false);
+        // if (feverText != null) feverText.gameObject.SetActive(false);
+    }
+
+    private void SetNextFeverSchedule(bool enterFever)
+    {
+        feverTimer = 0f;
+        isFeverTime = enterFever;
+
+        if (isFeverTime)
+        {
+            // フィーバー開始：継続時間を決定
+            currentFeverTargetTime = Random.Range(feverDurationMin, feverDurationMax);
+            Debug.Log($"[Fever] Start! Duration: {currentFeverTargetTime:F1}s");
+            // if (feverText != null) feverText.gameObject.SetActive(true);
+            
+            // フィーバー開始音などを鳴らすならここ
+            // PlaySound(feverStartSound); 
+        }
+        else
+        {
+            // フィーバー終了：次の開始までの時間を決定
+            currentFeverTargetTime = Random.Range(feverIntervalMin, feverIntervalMax);
+            Debug.Log($"[Fever] End. Next in: {currentFeverTargetTime:F1}s");
+            // if (feverText != null) feverText.gameObject.SetActive(false);
         }
     }
 
@@ -434,11 +476,20 @@ public class SimpleGameManager : MonoBehaviour
     {
         if (isGameOver) return;
 
+        // ゲームオーバー判定
         gameOverTimer += Time.deltaTime;
         if (gameOverTimer >= gameOverCheckInterval)
         {
             gameOverTimer = 0f;
             CheckHeightGameOver();
+        }
+
+        // フィーバータイマー
+        feverTimer += Time.deltaTime;
+        if (feverTimer >= currentFeverTargetTime)
+        {
+            // モード切り替え
+            SetNextFeverSchedule(!isFeverTime);
         }
     }
 
