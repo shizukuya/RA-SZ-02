@@ -527,8 +527,10 @@ public class SimpleGameManager : MonoBehaviour
                         }
                         else
                         {
-                            // 失敗 -> TopSceneへ（プレイ不可のため）
-                            GoToTopScene();
+                            // 失敗 -> 広告エラー時は救済措置としてプレイ可能にする
+                            Debug.LogWarning("Ad failed. Allowing play as fallback.");
+                            ResetGameOverCount();
+                            RestartGame();
                         }
                     });
                 },

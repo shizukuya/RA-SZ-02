@@ -69,10 +69,13 @@ public class LevelPlayAdsManager : MonoBehaviour
         LevelPlay.Init(appKey);
     }
 
-    private void OnSdkInitializationCompletedEvent(LevelPlayConfiguration config)
+    private async void OnSdkInitializationCompletedEvent(LevelPlayConfiguration config)
     {
         Debug.Log("LevelPlay Initialization Completed!");
         isInitialized = true;
+
+        // タイミング問題を回避するため、念のため少し待機してからロード
+        await Task.Delay(1000);
 
         // 初期化完了後に広告をロード
         if (showBannerOnLoad)
