@@ -451,6 +451,10 @@ public class SimpleItem : MonoBehaviour
         isMerged = true;
         if (other != null) other.isMerged = true;
 
+        // 0.5秒待機する前に、半透明にする (Alpha 0.7)
+        SetAlpha(0.7f);
+        if (other != null) other.SetAlpha(0.7f);
+
         // 0.5秒待機
         yield return new WaitForSeconds(0.5f);
 
@@ -750,6 +754,16 @@ public class SimpleItem : MonoBehaviour
         if (SimpleGameManager.Instance != null)
         {
             SimpleGameManager.Instance.PlayRockSound();
+        }
+    }
+
+    private void SetAlpha(float alpha)
+    {
+        if (spriteRenderer != null)
+        {
+            Color c = spriteRenderer.color;
+            c.a = alpha;
+            spriteRenderer.color = c;
         }
     }
 }
