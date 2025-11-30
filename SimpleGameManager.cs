@@ -12,8 +12,10 @@ public class SimpleGameManager : MonoBehaviour
     [Header("UI")]
     [SerializeField] private TMP_Text scoreText;
     [SerializeField] private TMP_Text scoreText2;
+    [SerializeField] private TMP_Text scoreText3;
     [SerializeField] private TMP_Text comboText;
     [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private AdConfirmationPanel adConfirmationPanel; // 広告確認パネル
     [SerializeField] private GameObject wall;
     [SerializeField] private Image nextItemImage; // 次のアイテムを表示するImage
 
@@ -22,7 +24,6 @@ public class SimpleGameManager : MonoBehaviour
     [SerializeField] private GameObject comboEffectPrefab;    // コンボ時のエフェクト
     [SerializeField] private GameObject fillingNEffectPrefab; // FillingN生成時のエフェクト
 
-    [Header("スコア設定")]
     [Header("スコア設定")]
     [SerializeField] private int matchBaseScore = 500;       // おにぎり完成（消滅）時の基本スコア
     [SerializeField] private float comboMultiplier = 0.5f;       // コンボ倍率（combo * multiplier）
@@ -62,6 +63,10 @@ public class SimpleGameManager : MonoBehaviour
     private int currentScore = 0;
     private int comboCount = 0;
     private bool isGameOver = false;
+    // PlayerPrefs Keys
+    private const string GAME_OVER_COUNT_KEY = "GameOverCount";
+    private const string LAST_RESET_TIME_KEY = "LastResetTime";
+    private const int GAME_OVER_LIMIT = 2;
 
     public bool IsGameOver => isGameOver;
     public int ComboCount => comboCount;
@@ -127,6 +132,9 @@ public class SimpleGameManager : MonoBehaviour
 
         // 初回のフィーバー待ち時間を設定
         SetNextFeverSchedule(false);
+
+        // ゲームオーバー制限チェック
+        CheckGameOverLimit();
         // if (feverText != null) feverText.gameObject.SetActive(false);
     }
 
@@ -384,7 +392,14 @@ public class SimpleGameManager : MonoBehaviour
         if (scoreText != null)
         {
             scoreText.text = $"{currentScore}";
+        }
+        if (scoreText2 != null)
+        {
             scoreText2.text = $"Score: {currentScore}";
+        }
+        if (scoreText3 != null)
+        {
+            scoreText3.text = $"Score: {currentScore}";
         }
     }
 
@@ -432,12 +447,120 @@ public class SimpleGameManager : MonoBehaviour
         if (isGameOver) return;
 
         isGameOver = true;
-
-        Debug.Log("ゲームオーバー！");
+        
+        // カウントアップと保存
+        int count = PlayerPrefs.GetInt(GAME_OVER_COUNT_KEY, 0);
+        count++;
+        PlayerPrefs.SetInt(GAME_OVER_COUNT_KEY, count);
+        PlayerPrefs.Save();
+        
+        Debug.Log($"ゲームオーバー！ (累積回数: {count})");
 
         // SEをすべて停止
         StopAllSounds();
 
+        // 制限に達したかチェック
+        if (count >= GAME_OVER_LIMIT)
+        {
+            // 制限到達 -> 広告確認パネルを表示（強制）
+            PlayGameOverSound();
+            ShowAdConfirmationPanel(true);
+        }
+        else
+        {
+            // 通常のゲームオーバー処理
+            ShowGameOverPanel();
+        }
+    }
+
+    private void CheckGameOverLimit()
+    {
+        // 24時間経過チェック
+        string lastResetStr = PlayerPrefs.GetString(LAST_RESET_TIME_KEY, "");
+        if (!string.IsNullOrEmpty(lastResetStr))
+        {
+            System.DateTime lastResetTime = System.DateTime.Parse(lastResetStr);
+            if ((System.DateTime.Now - lastResetTime).TotalHours >= 24)
+            {
+                // 24時間経過でリセット
+                ResetGameOverCount();
+            }
+        }
+        else
+        {
+            // 初回起動時などは現在時刻をセット
+            PlayerPrefs.SetString(LAST_RESET_TIME_KEY, System.DateTime.Now.ToString());
+            PlayerPrefs.Save();
+        }
+
+        int count = PlayerPrefs.GetInt(GAME_OVER_COUNT_KEY, 0);
+        if (count >= GAME_OVER_LIMIT)
+        {
+            // ゲーム開始時に制限に達している場合 -> プレイ不可、広告パネル表示
+            Debug.Log("ゲームオーバー制限に達しています。プレイ不可。");
+            
+            // スポナーを停止
+            SimpleSpawner spawner = FindFirstObjectByType<SimpleSpawner>();
+            if (spawner != null) spawner.enabled = false;
+
+            // 広告パネル表示
+            ShowAdConfirmationPanel(false);
+        }
+    }
+
+    private void ShowAdConfirmationPanel(bool fromGameOver)
+    {
+        if (adConfirmationPanel != null && LevelPlayAdsManager.Instance != null)
+        {
+            adConfirmationPanel.Show(
+                onConfirmed: () => 
+                {
+                    // 広告を見る -> リワード広告再生
+                    LevelPlayAdsManager.Instance.ShowRewarded((success) => 
+                    {
+                        if (success)
+                        {
+                            // 広告視聴完了 -> カウントリセット
+                            Debug.Log("Reward Granted! Resetting Count...");
+                            ResetGameOverCount();
+                            RestartGame();
+                        }
+                        else
+                        {
+                            // 失敗 -> TopSceneへ（プレイ不可のため）
+                            GoToTopScene();
+                        }
+                    });
+                },
+                onCancelled: () => 
+                {
+                    // キャンセル -> TopSceneへ
+                    GoToTopScene();
+                }
+            );
+        }
+        else
+        {
+            // パネルがない場合はTopSceneへ戻すしかない
+            GoToTopScene();
+        }
+    }
+
+    private void ResetGameOverCount()
+    {
+        PlayerPrefs.SetInt(GAME_OVER_COUNT_KEY, 0);
+        PlayerPrefs.SetString(LAST_RESET_TIME_KEY, System.DateTime.Now.ToString());
+        PlayerPrefs.Save();
+    }
+
+    private void GoToTopScene()
+    {
+        // TopSceneへ遷移 (シーン名が "TopScene" であると仮定)
+        UnityEngine.SceneManagement.SceneManager.LoadScene("TopScene");
+    }
+
+    private void ShowGameOverPanel()
+    {
         PlayGameOverSound();
 
         if (gameOverPanel != null)
